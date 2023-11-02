@@ -1,0 +1,89 @@
+
+1- import libraries , Read the image Grayscale and Blur
+   
+   code : {
+     !pip install easyocr
+     !pip install imutils
+     import cv2
+     from matplotlib import pyplot as plt
+     import numpy as np
+     import imutils
+     import easyocr
+     img = cv2.imread("/content/automobile-1846297_1920.jpg");
+     assert img is not None, "file could not be read, check with os.path.exists()"
+     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);
+     plt.imshow(cv2.cvtColor(gray,cv2.COLOR_BGR2RGB));
+   } 
+  - cvtColor : this method use for convert a color from BGR ( cv2 reads the image into format BGR always ) to a different one.
+  - matplotlib :this library read the image in RGB format so we need to convert the image always to RGB before.
+
+2- Apply filter and find edges for localization:
+   code : {
+     bfilter = cv2.bilateralFilter(gray , 5 , 17 ,17 ); #nois reduction
+     edged = cv2.Canny(bfilter,30,200); #edge detection
+     plt.imshow(cv2.cvtColor(edged,cv2.COLOR_BGR2RGB));
+   }    
+  -cv2.bilateralFilter( img , d , sigma_colour , sigma_space ) : used for reduction (the textures inside the squares are blurred, but the boundaries are still well-defined) {for more details pls read the article : https://cppsecrets.com/users/14200994698971101001051191001011079711464115111109971051219746101100117/Python-OpenCV-cv2bilateralFilter.php}
+  -cv2.Canny() : use to detect the edges in an image.
+
+3- Find coutours : 
+   code :{
+    keypoints = cv2.findContours(edged.copy() , cv2.RETR_TREE , cv2.CHAIN_APPROX_SIMPLE );
+    contours = imutils.grab_contours(keypoints);
+    contours = sorted(contours , key = cv2.contourArea , reverse = True)[:10];
+
+    #searching for a 4 points give you a rectangle :
+    location = None;
+    for contour in contours :
+        approx = cv2.approxPolyDP( contour , 12 , True );
+        if len(approx) == 4 :
+          location = approx;
+          break;
+    print(location)
+   }
+   -cv2.findContours : 
+     For better accuracy, use binary images. So before finding contours, apply threshold or canny edge detection.
+     In OpenCV, finding contours is like finding white object from black background. So remember, object to be found should be white and background should be black.
+     
+     cv2.CHAIN_APPROX_SIMPLE : if you find a line you don't need to store all the line just want approximate the two key points that represent a line     
+     cv2.RATE_TREE : how the result will be , here the result is tree 
+
+   -cv2.approxPolyDP() : if you have something roughly a rectangle but had a couple of little dents the higher we set the second parameters the estimation is going to be , and specify that is really a straight line 
+
+4- Apply masking : isolate the section you find it.
+   code :{
+    mask = np.zeros(gray.shape , np.uint8);
+    new_image = cv2.drawContours(mask , [location] , 0 , 255 , -1);
+    new_image = cv2.bitwise_and(img , img , mask = mask);
+    plt.imshow(cv2.cvtColor(new_image,cv2.COLOR_BGR2RGB));
+    (x , y) = np.where(mask == 255);
+    (x1 , y1) = ( np.min(x) , np.min(y) );
+    (x2 , y2) = ( np.max(x) , np.max(y) );
+    x2 = x2 + 1; #because you need from x1 to x2
+    y2 = y2 + 1;#for the same reason
+    cropped_image = gray[x1 : x2 , y1 : y2];
+    plt.imshow(cv2.cvtColor(cropped_image,cv2.COLOR_BGR2RGB));
+
+   }
+
+5- Use Easy OCR To Read Text : is a Python package that allows computer vision developers to effortlessly perform Optical Character Recognition.
+   code : {
+    reader = easyocr.Reader(['en']);
+    res = reader.readtext(cropped_image);
+    #print(res);
+   }
+6- Render Result :
+   code : {
+    text = res[0][-2];
+    font = cv2.FONT_HERSHEY_SIMPLEX;
+    final_res = cv2.putText(img , text = text , org = (approx[0][0][0] , approx[1][0][1] + 60 ) , fontFace = font , fontScale = 1 , color = ( 0 , 255 , 0 ) , thickness = 2  , lineType = cv2.LINE_AA );
+    final_res = cv2.rectangle( img , tuple(approx[0][0]) , tuple(approx[2][0]) , (0 , 255 , 0 ) , 3);
+    plt.imshow(cv2.cvtColor(final_res,cv2.COLOR_BGR2RGB));
+   }
+   - text : print the res array to show where the text exist
+   - org : to put the text in specific location
+   - cv2.rectangle : to select the rectangle which containing the car plate
+
+GOOD LUCK!
+ 
+     
